@@ -185,10 +185,13 @@ describe('Polls', () => {
             const polls = new Polls(room as any);
             const result = polls.closePoll('poll1');
 
+            spyOn(room.connection, 'deleteHandler');
             replyWithError(sent[0].id, 'not-allowed');
+            jasmine.clock().tick(POLLS_REPLY_TIMEOUT);
 
             await expectAsync(result).toBeRejectedWithError('not-allowed');
             expect(handlers.size).toBe(0);
+            expect(room.connection.deleteHandler).not.toHaveBeenCalled();
         });
 
         it('rejects answerPoll with the condition of the error reply', async () => {

@@ -100,7 +100,7 @@ export default class Polls {
      * @param pollId - The id of the poll.
      * @returns {Promise<void>} Rejected with the error condition (e.g. 'not-allowed' when the local participant is
      * neither the creator nor a moderator) when the polls component rejects the close, resolved otherwise. See
-     * {@link POLLS_REPLY_TIMEOUT}.
+     * {@link POLLS_REPLY_TIMEOUT}. Handle the rejection, or it is reported as unhandled.
      */
     closePoll(pollId: string): Promise<void> {
         return this._sendWithReply({
@@ -116,7 +116,8 @@ export default class Polls {
      * @param pollId
      * @param answers
      * @returns {Promise<void>} Rejected with the error condition (e.g. 'not-allowed' for a closed poll) when the
-     * polls component rejects the answers, resolved otherwise. See {@link POLLS_REPLY_TIMEOUT}.
+     * polls component rejects the answers, resolved otherwise. See {@link POLLS_REPLY_TIMEOUT}. Before this returned
+     * nothing: a caller that ignores the result now gets an unhandled rejection when an answer is refused.
      */
     answerPoll(pollId: string, answers: Array<boolean>): Promise<void> {
         return this._sendWithReply({
@@ -139,18 +140,19 @@ export default class Polls {
         const id = uuidv4();
 
         return new Promise((resolve, reject) => {
+            let timeout: ReturnType<typeof setTimeout> | null = null;
             const handler = connection.addHandler((msg: Element) => {
                 const error = getFirstChildElement(msg, 'error');
                 const condition = getFirstChildElement(error)?.tagName ?? 'undefined-condition';
 
                 logger.warn(`The polls component rejected ${id}: ${condition} ${getText(getFirstChildElement(error, 'text'))}`);
+                clearTimeout(timeout);
                 reject(new Error(condition));
 
                 return false;
             }, null, 'message', 'error', id, this._xmpp.pollsComponentAddress);
 
-            // After a rejection this resolves nothing and deletes a handler that is already gone.
-            setTimeout(() => {
+            timeout = setTimeout(() => {
                 connection.deleteHandler(handler);
                 resolve();
             }, POLLS_REPLY_TIMEOUT);
